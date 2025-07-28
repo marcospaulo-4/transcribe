@@ -71,9 +71,10 @@ async def transcribe_audio(
     file: UploadFile = File(..., description="Arquivo de áudio para transcrição"),
     provider: Optional[str] = Form(None, description="Provider: groq ou openai"),
     model: Optional[str] = Form(None, description="Modelo específico para usar"),
+    language: Optional[str] = Form(None, description="Código do idioma (ISO 639-1) ou 'auto' para detecção automática"),
 ):
     logger.info(
-        f"Starting transcription for file: {file.filename}, provider: {provider}, model: {model}"
+        f"Starting transcription for file: {file.filename}, provider: {provider}, model: {model}, language: {language}"
     )
 
     try:
@@ -91,7 +92,7 @@ async def transcribe_audio(
 
         # Realizar transcrição
         result = await transcription_service.transcribe_audio(
-            file=file, provider=provider_enum, model=model
+            file=file, provider=provider_enum, model=model, language=language
         )
 
         logger.info(

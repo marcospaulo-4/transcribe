@@ -10,10 +10,12 @@ from openai import AsyncOpenAI
 
 from constants import (
     AVAILABLE_MODELS,
+    DEFAULT_LANGUAGE,
     DEFAULT_MODELS,
     DEFAULT_PROVIDER,
     MAX_FILE_SIZE,
     SUPPORTED_AUDIO_FORMATS,
+    SUPPORTED_LANGUAGES,
     Provider,
 )
 
@@ -72,6 +74,24 @@ class TranscriptionService:
 
         self.logger.info(f"Arquivo válido: {file.filename} ({file.size} bytes)")
 
+    def _validate_language(self, language: Optional[str] = None) -> str:
+        """Valida o código de idioma fornecido."""
+        selected_language = language or DEFAULT_LANGUAGE
+        
+        if selected_language == "auto":
+            self.logger.info("Usando detecção automática de idioma")
+            return selected_language
+        
+        if selected_language not in SUPPORTED_LANGUAGES:
+            supported_codes = ", ".join(list(SUPPORTED_LANGUAGES.keys())[:10]) + "..."
+            error_msg = f"Código de idioma '{selected_language}' não suportado. Códigos suportados: {supported_codes}, 'auto'"
+            self.logger.error(error_msg)
+            raise HTTPException(status_code=400, detail=error_msg)
+        
+        language_name = SUPPORTED_LANGUAGES[selected_language]
+        self.logger.info(f"Idioma válido: {selected_language} ({language_name})")
+        return selected_language
+
     def _validate_provider_and_model(
         self, provider: Provider, model: Optional[str] = None
     ) -> str:
@@ -102,43 +122,79 @@ class TranscriptionService:
         )
         return selected_model
 
-    async def _transcribe_with_groq(self, audio_file_path: str, model: str) -> str:
+    async def _transcribe_with_groq(self, audio_file_path: str, model: str, language: str = "auto") -> str:
         if not self.groq_client:
             error_msg = "Groq client não inicializado"
             self.logger.error(error_msg)
             raise HTTPException(status_code=503, detail=error_msg)
 
         try:
-            self.logger.info(f"Iniciando transcrição com Groq usando modelo: {model}")
+            self.logger.info(f"Iniciando transcrição com Groq usando modelo: {model}, idioma: {language}")
+            
+            transcription_params = {
+                "file": None,  # será definido no with
+                "model": model,
+                "response_format": "text",
+            }
+            
+            # Apenas adicionar language se não for auto-detect
+            if language != "auto":
+                transcription_params["language"] = language
+            
             with open(audio_file_path, "rb") as audio_file:
+                transcription_params["file"] = audio_file
                 transcription = await self.groq_client.audio.transcriptions.create(
-                    file=audio_file, model=model, response_format="text"
+                    **transcription_params
                 )
 
+            # O Groq retorna uma string diretamente quando response_format="text"
+            # ou um objeto com .text quando response_format é outro formato
+            if isinstance(transcription, str):
+                result_text = transcription
+            else:
+                result_text = transcription.text if hasattr(transcription, 'text') else str(transcription)
+
             self.logger.info(
-                f"Transcrição Groq concluída. Tamanho do texto: {len(transcription)} caracteres"
+                f"Transcrição Groq concluída. Tamanho do texto: {len(result_text)} caracteres"
             )
-            return transcription
+            return result_text
 
         except Exception as e:
             error_msg = f"Erro na transcrição com Groq: {str(e)}"
-            self.logger.error(error_msg, exc_info=True)
+            self.logger.error(f"{error_msg}. Tipo da resposta: {type(transcription) if 'transcription' in locals() else 'Não definido'}", exc_info=True)
             raise HTTPException(status_code=500, detail=error_msg)
 
-    async def _transcribe_with_openai(self, audio_file_path: str, model: str) -> str:
+    async def _transcribe_with_openai(self, audio_file_path: str, model: str, language: str = "auto") -> str:
         if not self.openai_client:
             error_msg = "OpenAI client não inicializado"
             self.logger.error(error_msg)
             raise HTTPException(status_code=503, detail=error_msg)
 
         try:
-            self.logger.info(f"Iniciando transcrição com OpenAI usando modelo: {model}")
+            self.logger.info(f"Iniciando transcrição com OpenAI usando modelo: {model}, idioma: {language}")
+            
+            transcription_params = {
+                "file": None,  # será definido no with
+                "model": model,
+                "response_format": "text",
+            }
+            
+            # Apenas adicionar language se não for auto-detect
+            if language != "auto":
+                transcription_params["language"] = language
+            
             with open(audio_file_path, "rb") as audio_file:
+                transcription_params["file"] = audio_file
                 transcription = await self.openai_client.audio.transcriptions.create(
-                    file=audio_file, model=model, response_format="text"
+                    **transcription_params
                 )
 
-            result_text = transcription.text
+            # O OpenAI retorna uma string diretamente quando response_format="text"
+            # ou um objeto com .text quando response_format é outro formato
+            if isinstance(transcription, str):
+                result_text = transcription
+            else:
+                result_text = transcription.text
             self.logger.info(
                 f"Transcrição OpenAI concluída. Tamanho do texto: {len(result_text)} caracteres"
             )
@@ -146,7 +202,7 @@ class TranscriptionService:
 
         except Exception as e:
             error_msg = f"Erro na transcrição com OpenAI: {str(e)}"
-            self.logger.error(error_msg, exc_info=True)
+            self.logger.error(f"{error_msg}. Tipo da resposta: {type(transcription) if 'transcription' in locals() else 'Não definido'}", exc_info=True)
             raise HTTPException(status_code=500, detail=error_msg)
 
     async def transcribe_audio(
@@ -154,6 +210,7 @@ class TranscriptionService:
         file: UploadFile,
         provider: Optional[Provider] = None,
         model: Optional[str] = None,
+        language: Optional[str] = None,
     ) -> Dict[str, Any]:
         selected_provider = provider or DEFAULT_PROVIDER
         self.logger.info(
@@ -165,6 +222,9 @@ class TranscriptionService:
 
         # Validar provider e modelo
         selected_model = self._validate_provider_and_model(selected_provider, model)
+        
+        # Validar idioma
+        selected_language = self._validate_language(language)
 
         # Criar arquivo temporário
         temp_file_path = None
@@ -199,11 +259,11 @@ class TranscriptionService:
             try:
                 if selected_provider == Provider.GROQ:
                     transcription = await self._transcribe_with_groq(
-                        temp_file_path, selected_model
+                        temp_file_path, selected_model, selected_language
                     )
                 else:
                     transcription = await self._transcribe_with_openai(
-                        temp_file_path, selected_model
+                        temp_file_path, selected_model, selected_language
                     )
 
                 if not transcription or not transcription.strip():
@@ -214,6 +274,7 @@ class TranscriptionService:
                     "transcription": transcription.strip(),
                     "provider": selected_provider.value,
                     "model": selected_model,
+                    "language": selected_language,
                     "filename": file.filename or "arquivo_sem_nome",
                 }
 
@@ -252,6 +313,8 @@ class TranscriptionService:
                 "default_models": {
                     provider.value: model for provider, model in DEFAULT_MODELS.items()
                 },
+                "supported_languages": SUPPORTED_LANGUAGES,
+                "default_language": DEFAULT_LANGUAGE,
             }
             self.logger.info("Modelos disponíveis obtidos com sucesso")
             return result

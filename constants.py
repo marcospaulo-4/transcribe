@@ -55,3 +55,68 @@ SUPPORTED_AUDIO_FORMATS = [
 
 # Maximum file size (in bytes) - 25MB
 MAX_FILE_SIZE = 25 * 1024 * 1024
+
+# Supported language codes for transcription
+# Format: ISO 639-1 language codes
+SUPPORTED_LANGUAGES = {
+    "af": "afrikaans",
+    "ar": "arabic", 
+    "hy": "armenian",
+    "az": "azerbaijani",
+    "be": "belarusian",
+    "bs": "bosnian",
+    "bg": "bulgarian",
+    "ca": "catalan",
+    "zh": "chinese",
+    "hr": "croatian",
+    "cs": "czech",
+    "da": "danish",
+    "nl": "dutch",
+    "en": "english",
+    "et": "estonian",
+    "fi": "finnish",
+    "fr": "french",
+    "gl": "galician",
+    "de": "german",
+    "el": "greek",
+    "he": "hebrew",
+    "hi": "hindi",
+    "hu": "hungarian",
+    "is": "icelandic",
+    "id": "indonesian",
+    "it": "italian",
+    "ja": "japanese",
+    "kn": "kannada",
+    "kk": "kazakh",
+    "ko": "korean",
+    "lv": "latvian",
+    "lt": "lithuanian",
+    "mk": "macedonian",
+    "ms": "malay",
+    "mr": "marathi",
+    "mi": "maori",
+    "ne": "nepali",
+    "no": "norwegian",
+    "fa": "persian",
+    "pl": "polish",
+    "pt": "portuguese",
+    "ro": "romanian",
+    "ru": "russian",
+    "sr": "serbian",
+    "sk": "slovak",
+    "sl": "slovenian",
+    "es": "spanish",
+    "sw": "swahili",
+    "sv": "swedish",
+    "tl": "tagalog",
+    "ta": "tamil",
+    "th": "thai",
+    "tr": "turkish",
+    "uk": "ukrainian",
+    "ur": "urdu",
+    "vi": "vietnamese",
+    "cy": "welsh"
+}
+
+# Default language for transcription
+DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "auto")  # Auto-detect language
