@@ -229,7 +229,14 @@ class TranscriptionService:
         # Criar arquivo temporário
         temp_file_path = None
         try:
-            file_extension = file.filename.split(".")[-1] if file.filename else "tmp"
+            file_extension = file.filename.split(".")[-1].lower() if file.filename else "tmp"
+            
+            # Converter .opus para .ogg para compatibilidade com APIs
+            if file_extension == "opus":
+                original_extension = file_extension
+                file_extension = "ogg"
+                self.logger.info(f"Arquivo .{original_extension} detectado, convertendo extensão para .{file_extension} para compatibilidade com APIs")
+            
             with tempfile.NamedTemporaryFile(
                 delete=False, suffix=f".{file_extension}"
             ) as temp_file:
